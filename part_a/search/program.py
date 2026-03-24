@@ -1,7 +1,7 @@
 # COMP30024 Artificial Intelligence, Semester 1 2026
 # Project Part A: Single Player Cascade
 
-from .core import CellState, Coord, Direction, Action, MoveAction, EatAction, CascadeAction
+from .core import CellState, Coord, Direction, Action, MoveAction, EatAction, CascadeAction, PlayerColor
 from .utils import render_board
 
 
@@ -27,7 +27,12 @@ def search(
     # board state in a human-readable format. If your terminal supports ANSI
     # codes, set the `ansi` flag to True to print a colour-coded version!
     print(render_board(board, ansi=True))
-
+    board = apply(board, MoveAction(Coord(3, 3), Direction.Down))
+    print("next board")
+    print(render_board(board, ansi=True))
+    board = apply(board, EatAction(Coord(4, 3), Direction.Down))
+    print("next board")
+    print(render_board(board, ansi=True))
     # Do some impressive AI stuff here to find the solution...
     # ...
     # ... (your solution goes here!)
@@ -41,3 +46,39 @@ def search(
         MoveAction(Coord(3, 3), Direction.Down),
         EatAction(Coord(4, 3), Direction.Down),
     ]
+
+def apply(board: dict[Coord, CellState], action: Action) -> dict[Coord, CellState]:
+    """
+    this function will make a valid move on the board
+    parameters: 
+        `board`: explained above
+        `action`: either a MoveAction, EatAction, or CascadeAction to be performed
+                  this action must ALREADY be known to be a valid move ! this function 
+                  will not check if the move to be performed is valid.  
+    returns:
+        the new updated board state :-)
+    """
+    new_board = dict(board)
+
+    match action:    
+        case MoveAction(coord, direction):
+            source = new_board.pop(coord)
+            dest = coord + direction
+            
+            # if there's a red piece in the square -> merge
+            if dest in new_board:
+                    curr = new_board[dest]
+                    new_board[dest] = CellState(PlayerColor.RED, source.height + curr.height)
+            
+            # otherwise, square is empty (no blue already guaranteed by valid_move checker)
+            else:
+                    new_board[dest] = source
+            
+        case EatAction(coord, direction):
+              source = new_board.pop(coord)
+              dest = coord + direction
+              new_board[dest] = CellState(PlayerColor.RED, source.height)
+            
+    return new_board
+              
+
