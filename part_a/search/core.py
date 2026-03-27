@@ -13,7 +13,7 @@ from typing import Generator
 #          in `program.py` instead, as discussed in the specification.
 
 BOARD_N = 8
-
+#amy was here
 
 @dataclass(frozen=True, slots=True)
 class Vector2:
