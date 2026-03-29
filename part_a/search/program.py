@@ -83,11 +83,11 @@ def search(
                 heapq.heappush(pq, (child.f, -child.g, counter, child))
 
     return None
-
 def heuristic(board):
     # Build adjacency: row -> [columns with blues in that row]
     adj = {}
     has_blue = False
+
     for coord, cell in board.items():
         if cell.color == PlayerColor.BLUE:
             has_blue = True
@@ -99,8 +99,8 @@ def heuristic(board):
         return 0
 
     # Maximum bipartite matching via augmenting paths
-    # By König's theorem, this equals the minimum vertex cover,
-    # which equals the minimum number of row/column lines to cover all blues
+    # By König's theorem, this equals the minimum number of
+    # row/column lines needed to cover all blue pieces
     match_col = {}  # col -> matched row
 
     def try_augment(row, visited):
@@ -118,25 +118,8 @@ def heuristic(board):
         if try_augment(row, set()):
             matching += 1
 
-    blues = [(c, cell) for c, cell in board.items() if cell.color == PlayerColor.BLUE]
-    if not blues:
-        return 0
+    return matching
 
-    all_pieces = [(c, cell) for c, cell in board.items()]
-
-    total = 0
-    for bc, bcell in blues:
-        best_remaining = float('inf')
-        for pc, pcell in all_pieces:
-            if pc == bc:
-                continue
-            dist = abs(bc.r - pc.r) + abs(bc.c - pc.c)
-            actions = max(1, dist - min(0, bcell.height - pcell.height))
-            if actions < best_remaining:
-                best_remaining = dist
-        total += max(1, best_remaining)
-
-    return max(matching, total)
 
 
 def apply(board: dict[Coord, CellState], action: Action) -> dict[Coord, CellState]:
@@ -230,21 +213,32 @@ def get_legal_actions(state: dict[Coord, CellState]) -> list[Action]:
                 dest = coord + direction
                 dest_cell = state.get(dest, CellState())
 
-                if (dest_cell.color == PlayerColor.BLUE
-                        and cell.height >= dest_cell.height):
+                # only consider actions that move "towards" at least one blue
+                gets_closer = any(
+                    abs(dest.r - b.r) + abs(dest.c - b.c) <
+                    abs(coord.r - b.r) + abs(coord.c - b.c)
+                    for b in blues
+                )
+
+                if not gets_closer:
+                    continue
+
+                # EAT: allowed when adjacent square is blue and red is tall enough
+                if (
+                    dest_cell.color == PlayerColor.BLUE
+                    and cell.height >= dest_cell.height
+                ):
                     eats.append(EatAction(coord, direction))
 
-                elif dest_cell.is_empty or dest_cell.color == PlayerColor.RED:
-                    # regular moves, merges, cascades must get closer to at least ONE blue
-                    if any(
-                        abs(dest.r - b.r) + abs(dest.c - b.c) <
-                        abs(coord.r - b.r) + abs(coord.c - b.c)
-                        for b in blues
-                    ):
-                        moves.append(MoveAction(coord, direction))
-                        if cell.height >= 2:
-                            cascades.append(CascadeAction(coord, direction))
-            
+                # MOVE: allowed into empty or red square
+                if dest_cell.is_empty or dest_cell.color == PlayerColor.RED:
+                    moves.append(MoveAction(coord, direction))
+
+                # CASCADE: allowed whenever red stack has height >= 2
+                # and the direction gets closer to at least one blue
+                if cell.height >= 2:
+                    cascades.append(CascadeAction(coord, direction))
+
             except ValueError:
                 pass
 
