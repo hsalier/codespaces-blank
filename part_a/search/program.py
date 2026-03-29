@@ -14,6 +14,7 @@ class Node:
     action: Action | None = None       # default None
     g: int = 0                         # default 0
     h: int = 0                         # default 0
+    h_agg: int = 0
 
     @property
     def f(self) -> int:
@@ -49,12 +50,12 @@ def search(
     counter = 0
     start = Node(state=board, g=0, h=heuristic(board))
 
-    # (f, counter, node) — counter is a tiebreaker for equal f values
-    pq = [(start.f, -start.g, counter, start)]
+    # (f, inadmissable h, counter, node) — inadmissable is a tiebreaker for equal f values, defaults to counter
+    pq = [(start.f, start.h_agg, -start.g, counter, start)]
     visited = set()
 
     while pq:
-        _, _, _, node = heapq.heappop(pq)
+        _, _, _, _, node = heapq.heappop(pq)
 
         state_key = frozenset(node.state.items())
         if state_key in visited:
@@ -77,17 +78,18 @@ def search(
                     parent=node,
                     action=action,
                     g=node.g + 1,
-                    h=heuristic(new_state)
+                    h=heuristic(new_state),
+                    h_agg=h_aggressive(new_state)
                 )
                 counter += 1
-                heapq.heappush(pq, (child.f, -child.g, counter, child))
+                heapq.heappush(pq, (child.f, child.h_agg, -child.g, counter, child))
 
     return None
+
 def heuristic(board):
     # Build adjacency: row -> [columns with blues in that row]
     adj = {}
     has_blue = False
-
     for coord, cell in board.items():
         if cell.color == PlayerColor.BLUE:
             has_blue = True
@@ -99,8 +101,8 @@ def heuristic(board):
         return 0
 
     # Maximum bipartite matching via augmenting paths
-    # By König's theorem, this equals the minimum number of
-    # row/column lines needed to cover all blue pieces
+    # By König's theorem, this equals the minimum vertex cover,
+    # which equals the minimum number of row/column lines to cover all blues
     match_col = {}  # col -> matched row
 
     def try_augment(row, visited):
@@ -118,9 +120,29 @@ def heuristic(board):
         if try_augment(row, set()):
             matching += 1
 
+
     return matching
 
+def h_aggressive(board):
+    blues = [(c, cell) for c, cell in board.items() if cell.color == PlayerColor.BLUE]
+    if not blues:
+        return 0
 
+    all_pieces = [(c, cell) for c, cell in board.items()]
+
+    total = 0
+    for bc, bcell in blues:
+        best_remaining = float('inf')
+        for pc, pcell in all_pieces:
+            if pc == bc:
+                continue
+            dist = abs(bc.r - pc.r) + abs(bc.c - pc.c)
+            actions = max(1, dist - min(0, bcell.height - pcell.height))
+            if actions < best_remaining:
+                best_remaining = actions
+        total += max(1, best_remaining)
+
+    return total
 
 def apply(board: dict[Coord, CellState], action: Action) -> dict[Coord, CellState]:
     """
@@ -253,3 +275,4 @@ def reconstruct_path(node: Node) -> list:
         node = node.parent
     actions.reverse()
     return actions
+
